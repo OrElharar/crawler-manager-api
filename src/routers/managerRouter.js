@@ -1,10 +1,11 @@
 const express = require("express");
-const { crawlerPartialKey } = require("../db/dbKeys");
+const { crawlerPartialKey, treeLvlPartialKey } = require("../db/dbKeys");
 const redisClient = require("../db/redis");
 const { sendMessageToQueue } = require("../utils/sqs");
 const { createQueue } = require("../middlewares/sqs");
 
 const { getQueByCurrentDepth } = require("../operations/queOperations");
+const { createAndSaveRootPage, createAndSaveNewCrawler } = require("../operations/managerOperations");
 const QueueUrl = "https://sqs.eu-west-1.amazonaws.com/000447063003/crawler-queue.fifo";
 
 
@@ -21,51 +22,47 @@ router.post("/create-queue", createQueue, async (req, res) => {
 router.post("/manager/set-crawler", async (req, res) => {
 
     try {
-        const crawlers = await redisClient.keysAsync("crawler:*")
-        const crawlerId = crawlers.length + 1
-        const hashKey = `crawler:${crawlerId}`;
-        const hashArray = [];
-        const data = {
-            id: crawlerId,
-            ...req.body.data,
-            totalSentDepths: 0,
-            currentDepth: 0,
-            currentDepthNumberOfUrls: 0,
-            currentDepthScannedUrls: 0,
-            currentDepthNumberOfChildLinks: 1,
-            currentDepthFirstUrlId: 0,
-            totalNumberOfScannedUrls: 0
-        }
-        for (let [key, value] of Object.entries(data)) {
-            hashArray.push(key);
-            hashArray.push(value)
-        }
-
-        await redisClient.hmset(hashKey, hashArray);
-        console.log({ url: req.body.data });
-        await sendMessageToQueue({
-            id: 1,
-            url: req.body.data.startingUrl,
-            parentId: "-",
-            depth: 1,
-            crawlerId
-        });
-
-        res.send({ crawlerId })
+        const startingUrl = req.body.data.startingUrl
+        const crawler = await createAndSaveNewCrawler(startingUrl, req.body.data.maxDepth, req.body.data.maxNumberOfPages)
+        const rootPage = await createAndSaveRootPage(startingUrl)
+        await sendMessageToQueue(rootPage);
+        res.send({ crawlerId: crawler.id })
     } catch (err) {
         console.log(err);
     }
 })
 
-router.get("/manager/get-crawler/:id", async (req, res) => {
+// router.get("/manager/get-crawler/:id", async (req, res) => {
+//     try {
+//         const crawlerId = req.params.key;
+//         const crawlerStatus = await redisClient.hgetallAsync(`crawler:${crawlerId}`);
+//         const nextDepthLvlToSend = parseInt(crawlerStatus.totalSentDepths) + 1;
+
+//         const key = `${crawlerId}:${nextDepthLvlToSend}:links`
+//         const hash = await redisClient.hgetallAsync();
+//         res.send(hash)
+//     } catch (err) {
+//         console.log(err);
+//     }
+// })
+
+router.get("/manager/get-next-depth/:id", async (req, res) => {
     try {
         const crawlerId = req.params.key;
         const crawlerStatus = await redisClient.hgetallAsync(`crawler:${crawlerId}`);
-        const nextDepthLvlToSend = parseInt(crawlerStatus.totalSentDepths) + 1;
+        const nextDepthLvlToSend = parseInt(crawlerStatus.nextDepthLvlToSend);
 
-        const key = `${crawlerId}:${nextDepthLvlToSend}:links`
-        const hash = await redisClient.hgetallAsync();
-        res.send(hash)
+        const key = `${crawlerId}:${nextDepthLvlToSend}:${treeLvlPartialKey}`
+        const jsonDepthTree = await redisClient.getAsync(key);
+        if (jsonDepthTree == null) {
+            return res.status(404).send({
+                status: 404,
+                message: "Not found."
+            })
+        }
+        await redisClient.hincrbyAsync(`crawler:${crawlerId}`, "nextDepthLvlToSend", 1);
+        const depthTree = JSON.parse(jsonDepthTree)
+        res.send(depthTree)
     } catch (err) {
         console.log(err);
     }
