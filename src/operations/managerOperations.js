@@ -1,9 +1,7 @@
-const { crawlersCounter, crawlerPartialKey, urlObjPartialKey } = require("../db/dbKeys");
 const redisClient = require("../db/redis");
 
-const createAndSaveRootPage = (url) => {
+const createAndSaveRootPage = (url, crawlerId) => {
     const id = 1;
-    const crawlerId = 1;
     const urlDepth = 1;
     const parentId = 0;
     // const key = `${crawlerId}:${urlDepth}:${id}:${urlObjPartialKey}`;
@@ -26,7 +24,8 @@ const createAndSaveNewCrawler = async (startUrl, maxDepth, maxNumberOfPages) => 
             currentDepthScannedUrls: 0,
             currentDepthFirstUrlId: 1,
             currentDepthDeadEnds: 0,
-            totalNumberOfScannedUrls: 0
+            totalNumberOfScannedUrls: 0,
+            // nextParentUrlId: 0,
         }
         await saveCrawler(data, id)
         return data

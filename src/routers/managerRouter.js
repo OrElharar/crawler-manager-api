@@ -24,7 +24,7 @@ router.post("/manager/set-crawler", async (req, res) => {
     try {
         const startingUrl = req.body.data.startingUrl
         const crawler = await createAndSaveNewCrawler(startingUrl, req.body.data.maxDepth, req.body.data.maxNumberOfPages)
-        const rootPage = await createAndSaveRootPage(startingUrl)
+        const rootPage = await createAndSaveRootPage(startingUrl, crawler.id)
         await sendMessageToQueue(rootPage);
         res.send({ crawlerId: crawler.id })
     } catch (err) {
@@ -32,23 +32,11 @@ router.post("/manager/set-crawler", async (req, res) => {
     }
 })
 
-// router.get("/manager/get-crawler/:id", async (req, res) => {
-//     try {
-//         const crawlerId = req.params.key;
-//         const crawlerStatus = await redisClient.hgetallAsync(`crawler:${crawlerId}`);
-//         const nextDepthLvlToSend = parseInt(crawlerStatus.totalSentDepths) + 1;
 
-//         const key = `${crawlerId}:${nextDepthLvlToSend}:links`
-//         const hash = await redisClient.hgetallAsync();
-//         res.send(hash)
-//     } catch (err) {
-//         console.log(err);
-//     }
-// })
 
 router.get("/manager/get-next-depth/:id", async (req, res) => {
     try {
-        const crawlerId = req.params.key;
+        const crawlerId = req.params.id;
         const crawlerStatus = await redisClient.hgetallAsync(`crawler:${crawlerId}`);
         const nextDepthLvlToSend = parseInt(crawlerStatus.nextDepthLvlToSend);
 
@@ -62,6 +50,7 @@ router.get("/manager/get-next-depth/:id", async (req, res) => {
         }
         await redisClient.hincrbyAsync(`crawler:${crawlerId}`, "nextDepthLvlToSend", 1);
         const depthTree = JSON.parse(jsonDepthTree)
+        console.log({ nextDepthLvlToSend, depthTree });
         res.send(depthTree)
     } catch (err) {
         console.log(err);

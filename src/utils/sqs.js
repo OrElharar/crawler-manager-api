@@ -13,6 +13,7 @@ const sendMessageToQueue = async (messageBody) => {
     const MessageBody = JSON.stringify(messageBody);
 
     try {
+
         await sqs.sendMessage({
             QueueUrl,
             // MessageGroupId: messageBody.crawlerId.toString(), ---FifoQueue
