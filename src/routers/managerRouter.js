@@ -50,7 +50,6 @@ router.get("/manager/get-next-depth/:id", async (req, res) => {
         }
         await redisClient.hincrbyAsync(`crawler:${crawlerId}`, "nextDepthLvlToSend", 1);
         const depthTree = JSON.parse(jsonDepthTree)
-        console.log({ nextDepthLvlToSend, depthTree });
         res.send(depthTree)
     } catch (err) {
         console.log(err);
